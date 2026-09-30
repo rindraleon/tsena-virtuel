@@ -24,6 +24,8 @@ import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import SellerRegisterPage from './pages/auth/SellerRegisterPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import VerifyEmailPage from './pages/auth/VerifyEmailPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 
 // Public pages
 import CartPage from './pages/public/CartPage';
@@ -93,6 +95,8 @@ function App() {
           <Route path="/inscription" element={<GuestRoute><RegisterPage /></GuestRoute>} />
           <Route path="/inscription/vendeur" element={<GuestRoute><SellerRegisterPage /></GuestRoute>} />
           <Route path="/mot-de-passe-oublie" element={<GuestRoute><ForgotPasswordPage /></GuestRoute>} />
+          <Route path="/verification-email" element={<GuestRoute><VerifyEmailPage /></GuestRoute>} />
+          <Route path="/reinitialiser-mot-de-passe" element={<GuestRoute><ResetPasswordPage /></GuestRoute>} />
 
           {/* Legacy aliases */}
           <Route path="/login" element={<Navigate to="/connexion" replace />} />

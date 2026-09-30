@@ -1,9 +1,10 @@
-import { useTitle, usePagination } from '../../hooks';
-import { useState, useMemo } from 'react';
+import { useTitle } from '../../hooks';
+import { useState } from 'react';
 import { SlidersHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
-import { mockProducts, mockCategories } from '../../shared/data/mockData';
+import { useProductsBridge, useCategoriesBridge, apiProductToProductLike } from '../../hooks/queries/useBridge';
 import ProductCard from '../../components/product/ProductCard';
 import SearchInput from '../../shared/components/SearchInput';
+import Skeleton from '../../components/common/Skeleton';
 
 type SortKey = 'relevance' | 'price-asc' | 'price-desc' | 'newest' | 'rating' | 'discount';
 
@@ -16,36 +17,27 @@ export default function ProductsPage() {
   const [maxPrice, setMaxPrice] = useState('');
   const [onlyPromo, setOnlyPromo] = useState(false);
   const [onlyInStock, setOnlyInStock] = useState(false);
+  const [page, setPage] = useState(1);
 
-  const filtered = useMemo(() => {
-    let result = mockProducts.filter((p) => p.status === 'active');
+  // Hooks API avec fallback mocks
+  const { data: productsData, isLoading } = useProductsBridge({
+    search: search || undefined,
+    categoryId: category !== 'all' ? category : undefined,
+    minPrice: minPrice ? Number(minPrice) : undefined,
+    maxPrice: maxPrice ? Number(maxPrice) : undefined,
+    inStock: onlyInStock || undefined,
+    sortBy: sort === 'price-asc' ? 'price' : sort === 'price-desc' ? 'price' : sort === 'newest' ? 'createdAt' : undefined,
+    order: sort === 'price-asc' ? 'ASC' : 'DESC',
+    page,
+    limit: 12,
+  });
 
-    if (search) result = result.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
-    if (category !== 'all') result = result.filter((p) => p.category === category);
-    if (minPrice) result = result.filter((p) => p.price >= Number(minPrice));
-    if (maxPrice) result = result.filter((p) => p.price <= Number(maxPrice));
-    if (onlyPromo) result = result.filter((p) => p.discount && p.discount > 0);
-    if (onlyInStock) result = result.filter((p) => p.stock > 0);
+  const { data: categoriesData } = useCategoriesBridge();
 
-    switch (sort) {
-      case 'price-asc': result.sort((a, b) => a.price - b.price); break;
-      case 'price-desc': result.sort((a, b) => b.price - a.price); break;
-      case 'rating': result.sort((a, b) => (b.rating || 0) - (a.rating || 0)); break;
-      case 'discount': result.sort((a, b) => (b.discount || 0) - (a.discount || 0)); break;
-      case 'newest': result.sort((a, b) => b.id.localeCompare(a.id)); break;
-    }
-
-    return result;
-  }, [search, category, sort, minPrice, maxPrice, onlyPromo, onlyInStock]);
-
-  const {
-    currentPage,
-    setPage,
-    paginatedData,
-    totalPages,
-    canGoNext,
-    canGoPrevious,
-  } = usePagination({ data: filtered, itemsPerPage: 12 });
+  const products = productsData?.items || [];
+  const meta = productsData?.meta;
+  const categories = categoriesData?.items || [];
+  const totalPages = meta?.totalPages || 1;
 
   // Reset page when filters change
   const handleSearch = (value: string) => { setSearch(value); setPage(1); };
@@ -65,7 +57,12 @@ export default function ProductsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 animate-fade-in-up">
       <h1 className="text-2xl font-bold text-primary mb-2">Tous nos produits</h1>
-      <p className="text-muted text-sm mb-6">{filtered.length} produit{filtered.length > 1 ? 's' : ''} trouvé{filtered.length > 1 ? 's' : ''}</p>
+      <p className="text-muted text-sm mb-6">
+        {meta?.total || products.length} produit{(meta?.total || products.length) > 1 ? 's' : ''} trouvé{(meta?.total || products.length) > 1 ? 's' : ''}
+        {productsData?.source === 'mock' && (
+          <span className="ml-2 text-xs bg-accent/20 text-accent px-2 py-0.5 rounded">Mode démo</span>
+        )}
+      </p>
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar filters */}
@@ -84,13 +81,13 @@ export default function ProductsPage() {
               <label className="block text-sm font-medium text-text mb-1">Catégorie</label>
               <select value={category} onChange={(e) => handleCategory(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-primary">
                 <option value="all">Toutes les catégories</option>
-                {mockCategories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
 
             {/* Price */}
             <div>
-              <label className="block text-sm font-medium text-text mb-1">Prix (PKR)</label>
+              <label className="block text-sm font-medium text-text mb-1">Prix (Ar)</label>
               <div className="flex gap-2">
                 <input type="number" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} placeholder="Min" className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-primary" />
                 <input type="number" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="Max" className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-primary" />
@@ -130,7 +127,20 @@ export default function ProductsPage() {
             </select>
           </div>
 
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bg-surface rounded-xl border border-border overflow-hidden">
+                  <Skeleton className="aspect-square w-full" />
+                  <div className="p-3 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                    <Skeleton className="h-5 w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : products.length === 0 ? (
             <div className="bg-surface rounded-xl border border-border p-10 text-center text-muted">
               Aucun produit ne correspond à votre recherche.
               <button type="button" onClick={resetAll} className="block mx-auto mt-3 text-sm text-primary font-medium hover:underline">
@@ -140,20 +150,23 @@ export default function ProductsPage() {
           ) : (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-                {paginatedData.map((product) => <ProductCard key={product.id} product={product} />)}
+                {products.map((product) => {
+                  const productLike = apiProductToProductLike(product);
+                  return <ProductCard key={product.id} product={productLike} />;
+                })}
               </div>
 
               {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between gap-4 pt-6">
                   <span className="text-xs text-muted hidden sm:block">
-                    Page {currentPage} sur {totalPages}
+                    Page {page} sur {totalPages}
                   </span>
                   <nav className="flex items-center gap-1 ml-auto" aria-label="Pagination">
                     <button
                       type="button"
                       onClick={() => setPage(1)}
-                      disabled={!canGoPrevious}
+                      disabled={page === 1}
                       className="p-1.5 rounded-lg hover:bg-surface-tertiary text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       aria-label="Première page"
                     >
@@ -161,18 +174,18 @@ export default function ProductsPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPage(currentPage - 1)}
-                      disabled={!canGoPrevious}
+                      onClick={() => setPage(page - 1)}
+                      disabled={page === 1}
                       className="p-1.5 rounded-lg hover:bg-surface-tertiary text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       aria-label="Page précédente"
                     >
                       <ChevronLeft size={16} />
                     </button>
-                    <span className="text-sm font-medium text-text px-2">{currentPage} / {totalPages}</span>
+                    <span className="text-sm font-medium text-text px-2">{page} / {totalPages}</span>
                     <button
                       type="button"
-                      onClick={() => setPage(currentPage + 1)}
-                      disabled={!canGoNext}
+                      onClick={() => setPage(page + 1)}
+                      disabled={page >= totalPages}
                       className="p-1.5 rounded-lg hover:bg-surface-tertiary text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       aria-label="Page suivante"
                     >
@@ -181,7 +194,7 @@ export default function ProductsPage() {
                     <button
                       type="button"
                       onClick={() => setPage(totalPages)}
-                      disabled={!canGoNext}
+                      disabled={page >= totalPages}
                       className="p-1.5 rounded-lg hover:bg-surface-tertiary text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                       aria-label="Dernière page"
                     >
