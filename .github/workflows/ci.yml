@@ -1,0 +1,120 @@
+# ============================================
+# GitHub Actions CI/CD — TSENA Frontend
+# ============================================
+
+name: TSENA Frontend CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'nazar-shopping-mart/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'nazar-shopping-mart/**'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ─── Lint & Build ──────────────────────────────────────
+  lint-and-build:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: nazar-shopping-mart
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: nazar-shopping-mart/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: nazar-shopping-mart/dist/
+          retention-days: 7
+
+  # ─── Lighthouse Audit ──────────────────────────────────
+  lighthouse:
+    name: Lighthouse Audit
+    runs-on: ubuntu-latest
+    needs: lint-and-build
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: nazar-shopping-mart
+
+      - name: Build
+        run: npm run build
+        working-directory: nazar-shopping-mart
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v11
+        with:
+          configPath: './nazar-shopping-mart/lighthouserc.json'
+          uploadArtifacts: true
+
+  # ─── Deploy Preview ────────────────────────────────────
+  deploy-preview:
+    name: Deploy Preview
+    runs-on: ubuntu-latest
+    needs: lint-and-build
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy preview
+        run: |
+          echo "Deploy preview for PR #${{ github.event.number }}"
+          # Intégrer Vercel/Netlify/Cloudflare Pages ici
+
+  # ─── Deploy Production ─────────────────────────────────
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: lint-and-build
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to CDN
+        run: |
+          echo "Deploying frontend to production CDN..."
+          # Intégrer Vercel/Netlify/Cloudflare Pages ici

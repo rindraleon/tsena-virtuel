@@ -3,10 +3,15 @@ import { Zap, ArrowRight } from 'lucide-react';
 import CountdownTimer from '../common/CountdownTimer';
 import ProductCard from '../product/ProductCard';
 import Reveal from '../common/Reveal';
-import { flashSaleProducts } from '../../data/products';
+import { useFeaturedProductsBridge } from '../../hooks/queries/useBridge';
+import { apiProductToProductLike } from '../../hooks/queries/useBridge';
+import Skeleton from '../common/Skeleton';
 
 export default function FlashSaleSection() {
   const endDate = new Date(Date.now() + 3 * 60 * 60 * 1000);
+  const { data, isLoading } = useFeaturedProductsBridge(6);
+
+  const products = (data?.items || []).map(apiProductToProductLike);
 
   return (
     <section className="py-8 md:py-12" aria-label="Vente flash">
@@ -36,9 +41,24 @@ export default function FlashSaleSection() {
 
         {/* Products grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          {flashSaleProducts.map((product, idx) => (
-            <ProductCard key={product.id} product={product} index={idx} />
-          ))}
+          {isLoading ? (
+            <>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="bg-surface rounded-xl border border-border overflow-hidden">
+                  <Skeleton className="aspect-square w-full" />
+                  <div className="p-3 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                    <Skeleton className="h-5 w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            products.map((product, idx) => (
+              <ProductCard key={product.id} product={product} index={idx} />
+            ))
+          )}
         </div>
       </div>
     </section>
